@@ -1,4 +1,4 @@
-const serviceWorkerReadyP = navigator.serviceWorker.register('/sw-bundle.js')
+const serviceWorkerReadyP = navigator.serviceWorker.register('./sw-bundle.js')
   .then(reg => {
     console.log('Service Worker registered:', reg);
   }).catch(error => {
@@ -11,7 +11,11 @@ main();
 
 async function main() {
   await serviceWorkerReadyP;
+  // add iframe to subdomain
   const childPage = document.createElement('iframe')
-  childPage.src = '//xyz.localhost:9966/'
+  const url = new URL(window.location.href)
+  url.hostname = `xyz.${url.hostname}`
+  url.pathname = ``
+  childPage.src = url.href
   document.body.appendChild(childPage);
 }
