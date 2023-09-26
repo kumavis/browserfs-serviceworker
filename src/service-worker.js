@@ -14,8 +14,9 @@ console.log('hi from service worker')
 const systemReady = prepareSystem()
 
 // event listener must be setup synchronously
-const fsServer = makeFsServer('/fs/', systemReady)
-const subdomainServer = makeSubdomainServer(systemReady)
+const baseUrl = new URL(location.href)
+const fsServer = makeFsServer('/fs/', systemReady, baseUrl)
+const subdomainServer = makeSubdomainServer(systemReady, baseUrl)
 
 async function handleRequest (event) {
   try {
@@ -40,15 +41,16 @@ async function handleRequest (event) {
   }
 }
 
-function makeSubdomainServer (systemReady) {
+function makeSubdomainServer (systemReady, baseUrl) {
+  const baseUrlHostParts = baseUrl.hostname.split('.')
   return {
     test: (url) => {
-      const subdomains = url.hostname.split('.').slice(0, -1)
+      const subdomains = url.hostname.split('.').slice(0, -1 * baseUrlHostParts.length)
       return subdomains.length > 0
     },
     serve: async (url) => {
       try {
-        const subdomains = url.hostname.split('.').slice(0, -1)
+        const subdomains = url.hostname.split('.').slice(0, -1 * baseUrlHostParts.length)
         if (subdomains.length > 1) {
           throw new Error('Unknown subdomain format')
         }
@@ -63,10 +65,14 @@ function makeSubdomainServer (systemReady) {
   }
 }
 
-function makeFsServer (pathPrefix, systemReady) {
+function makeFsServer (pathPrefix, systemReady, baseUrl) {
   return {
     test: (url) => {
-      return url.pathname.startsWith(pathPrefix)
+      const basePaths = baseUrl.pathname.split('/').slice(1, -1)
+      const targetPaths = url.pathname.split('/').slice(1 + basePaths.length, -1)
+      const relevantPath = `/${targetPaths.join('/')}`
+      console.log({ basePaths, targetPaths, relevantPath })
+      return relevantPath.startsWith(pathPrefix)
     },
     serve: async (url) => {
       const { fs } = await systemReady
