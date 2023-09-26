@@ -71,12 +71,14 @@ function makeFsServer (pathPrefix, systemReady, baseUrl) {
       const basePaths = baseUrl.pathname.split('/').slice(1, -1)
       const targetPaths = url.pathname.split('/').slice(1 + basePaths.length, -1)
       const relevantPath = `/${targetPaths.join('/')}`
-      console.log({ basePaths, targetPaths, relevantPath })
       return relevantPath.startsWith(pathPrefix)
     },
     serve: async (url) => {
       const { fs } = await systemReady
-      const relativeUrl = url.pathname.substring(pathPrefix.length);
+      const basePaths = baseUrl.pathname.split('/').slice(1, -1)
+      const targetPaths = url.pathname.split('/').slice(1 + basePaths.length, -1)
+      const relevantPath = `/${targetPaths.join('/')}`
+      const relativeUrl = relevantPath.substring(pathPrefix.length);
       return serveFile(fs, relativeUrl)
     },
   }
