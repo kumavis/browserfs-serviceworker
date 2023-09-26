@@ -4,34 +4,87 @@ import { configure, BFSRequire } from 'browserfs';
 self.addEventListener('install', event => {
   self.skipWaiting();
 });
+self.addEventListener('fetch', event => {
+  event.respondWith(
+    handleRequest(event)
+  )
+});
 
 console.log('hi from service worker')
 const systemReady = prepareSystem()
 
 // event listener must be setup synchronously
-const pathPrefix = '/fs/';
-self.addEventListener('fetch', event => {
-  console.log('sw saw fetch', event.request.url)
-  const url = new URL(event.request.url)
-  if (url.pathname.startsWith(pathPrefix)) {
-    // respond with the matching file in fs
-    let relativeUrl = url.pathname.substring(pathPrefix.length);
-    console.log('reading from fs', relativeUrl)
-    event.respondWith((async function () {
-      const { fs } = await systemReady
+const fsServer = makeFsServer('/fs/', systemReady)
+const subdomainServer = makeSubdomainServer(systemReady)
+
+async function handleRequest (event) {
+  try {
+    console.log('saw fetch', event.request.url)
+    const url = new URL(event.request.url)
+    // serve subdomain
+    if (subdomainServer.test(url)) {
+      console.log('serve subdomain', event.request.url)
+      return subdomainServer.serve(url);
+    }
+    // serve file system
+    if (fsServer.test(url)) {
+      console.log('serve fs', event.request.url)
+      return fsServer.serve(url);
+    }
+    // fallback to network
+    console.log('fallback to network', event.request.url)
+    return fetch(event.request);
+  } catch (err) {
+    console.error(err)
+    return new Response('Internal Server Error', { status: 500, statusText: 'Internal Server Error' })
+  }
+}
+
+function makeSubdomainServer (systemReady) {
+  return {
+    test: (url) => {
+      const subdomains = url.hostname.split('.').slice(0, -1)
+      return subdomains.length > 0
+    },
+    serve: async (url) => {
       try {
-        const fileContent = await fs.promises.readFile(relativeUrl)
-        return new Response(fileContent)
+        const subdomains = url.hostname.split('.').slice(0, -1)
+        if (subdomains.length > 1) {
+          throw new Error('Unknown subdomain format')
+        }
+        const subdomain = subdomains[0]
+        const { fs } = await systemReady
+        const fileUrl = `/${subdomain}/index.html`
+        return serveFile(fs, fileUrl)
       } catch (err) {
         return new Response('Not Found', { status: 404, statusText: 'Not Found' })
       }
-    })())
-  } else {
-    console.log('fallback to network')
-    // For other requests, try to fetch from the network
-    event.respondWith(fetch(event.request));
+    },
   }
-});
+}
+
+function makeFsServer (pathPrefix, systemReady) {
+  return {
+    test: (url) => {
+      return url.pathname.startsWith(pathPrefix)
+    },
+    serve: async (url) => {
+      const { fs } = await systemReady
+      const relativeUrl = url.pathname.substring(pathPrefix.length);
+      return serveFile(fs, relativeUrl)
+    },
+  }
+}
+
+async function serveFile (fs, path) {
+  try {
+    console.log('serve file', path)
+    const fileContent = await fs.promises.readFile(path)
+    return new Response(fileContent)
+  } catch (err) {
+    return new Response('Not Found', { status: 404, statusText: 'Not Found' })
+  }
+}
 
 async function prepareSystem () {
   // you can also add a callback as the last parameter instead of using promises
@@ -46,6 +99,7 @@ async function prepareSystem () {
   fs.promises = {
     readFile: promisify(fs.readFile),
     writeFile: promisify(fs.writeFile),
+    mkdir: promisify(fs.mkdir),
   }
 
   // Now, you can write code like this:
@@ -55,6 +109,10 @@ async function prepareSystem () {
   
   await fs.promises.writeFile('/data/test.txt', 'Cool, I can do this in indexeddb!')
   await fs.promises.readFile('/data/test.txt')
+
+  await fs.promises.mkdir('/xyz/')
+  await fs.promises.writeFile('/xyz/index.html', 'hello from xyz')
+  await fs.promises.readFile('/xyz/index.html')
   
   console.log('fixtures ready')
 
