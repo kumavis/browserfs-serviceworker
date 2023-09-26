@@ -6,6 +6,7 @@
   "author": "kumavis <aaron@kumavis.me>",
   "license": "MIT",
   "scripts": {
+    "postinstall": "patch-package",
     "dev": "beefy src/index.js:bundle.js src/service-worker.js:service-worker.js --live --open -- -t [ babelify --presets [ @babel/preset-env ] ]"
   },
   "devDependencies": {
@@ -13,7 +14,8 @@
     "@babel/preset-env": "^7.22.20",
     "babelify": "^10.0.0",
     "beefy": "^2.1.8",
-    "browserify": "^17.0.0"
+    "browserify": "^17.0.0",
+    "patch-package": "^8.0.0"
   },
   "dependencies": {
     "browserfs": "^1.4.3"
